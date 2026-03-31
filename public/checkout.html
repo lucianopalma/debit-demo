@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment</title>
+  <script src="https://js.stripe.com/v3/"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -83,54 +84,8 @@
       margin-bottom: 20px;
     }
 
-    .card-form {
-      border: 1.5px solid #e5e7eb;
-      border-radius: 10px;
-      overflow: hidden;
+    #payment-element {
       margin-bottom: 20px;
-    }
-
-    .card-field {
-      padding: 12px 14px;
-      border-bottom: 1.5px solid #e5e7eb;
-    }
-
-    .card-field:last-child {
-      border-bottom: none;
-    }
-
-    .card-field label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-
-    .card-field input {
-      width: 100%;
-      border: none;
-      outline: none;
-      font-size: 15px;
-      color: #111827;
-      background: transparent;
-      padding: 0;
-    }
-
-    .card-form:focus-within {
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    }
-
-    .card-field-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .card-field-row .card-field:first-child {
-      border-right: 1.5px solid #e5e7eb;
     }
 
     .btn {
@@ -228,22 +183,7 @@
       <h1>Dados do pagamento</h1>
 
       <form id="payment-form">
-        <div class="card-form">
-          <div class="card-field">
-            <label for="card-number">Número do cartão</label>
-            <input id="card-number" type="text" inputmode="numeric" placeholder="1234 5678 9012 3456" maxlength="19" autocomplete="cc-number" required />
-          </div>
-          <div class="card-field-row">
-            <div class="card-field">
-              <label for="exp-month">Mês de validade</label>
-              <input id="exp-month" type="text" inputmode="numeric" placeholder="MM" maxlength="2" autocomplete="cc-exp-month" required />
-            </div>
-            <div class="card-field">
-              <label for="exp-year">Ano de validade</label>
-              <input id="exp-year" type="text" inputmode="numeric" placeholder="AAAA" maxlength="4" autocomplete="cc-exp-year" required />
-            </div>
-          </div>
-        </div>
+        <div id="payment-element"></div>
         <button type="submit" class="btn" id="pay-btn">
           <span id="spinner"></span>
           <span id="btn-text">Pagar agora</span>
@@ -269,20 +209,15 @@
       window.location.href = "/";
     }
 
+    const fundingLabels = { credit: "Credito", debit: "Debito" };
+
     // Populate order summary
     document.getElementById("summary-amount").textContent =
       "R$ " + amount.toFixed(2).replace(".", ",");
 
-    const fundingLabels = { credit: "Credito", debit: "Debito" };
     const badge = document.getElementById("funding-badge");
     badge.textContent = fundingLabels[fundingType] || fundingType;
     badge.classList.add(fundingType);
-
-    // Format card number with spaces as the user types
-    document.getElementById("card-number").addEventListener("input", (e) => {
-      const digits = e.target.value.replace(/\D/g, "").slice(0, 16);
-      e.target.value = digits.replace(/(.{4})/g, "$1 ").trim();
-    });
 
     const form = document.getElementById("payment-form");
     const payBtn = document.getElementById("pay-btn");
@@ -290,16 +225,46 @@
     const btnText = document.getElementById("btn-text");
     const errorMsg = document.getElementById("error-msg");
 
+    let stripe, elements;
+
+    // Fetch publishable key and mount the Payment Element in deferred mode
+    (async () => {
+      const { publishableKey } = await fetch("/config").then((r) => r.json());
+
+      stripe = Stripe(publishableKey);
+      elements = stripe.elements({
+        mode: "payment",
+        amount: Math.round(amount * 100),
+        currency: "brl",
+        paymentMethodCreation: "manual",
+      });
+      elements.create("payment", { layout: "tabs" }).mount("#payment-element");
+    })();
+
+    // On submit: validate → create payment method → create & confirm PI server-side
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-
-      const cardNumber = document.getElementById("card-number").value.replace(/\s/g, "");
-      const expMonth = document.getElementById("exp-month").value.trim();
-      const expYear = document.getElementById("exp-year").value.trim();
-
       setLoading(true);
 
       try {
+        // Validate the Payment Element fields
+        const { error: submitError } = await elements.submit();
+        if (submitError) throw new Error(submitError.message);
+
+        // Create a PaymentMethod from the Payment Element
+        const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
+          elements,
+          params: {
+            card: {
+              funding_options: {
+                preferred: fundingType === "debit" ? "debit" : "credit",
+              },
+            },
+          },
+        });
+        if (pmError) throw new Error(pmError.message);
+
+        // Create and confirm the PaymentIntent server-side
         const res = await fetch("/create-payment-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -307,21 +272,17 @@
             amount,
             currency: "brl",
             fundingType,
-            cardNumber,
-            expMonth,
-            expYear,
+            paymentMethodId: paymentMethod.id,
           }),
         });
 
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento.");
 
         if (data.status === "succeeded") {
           showSuccess();
         } else {
-          showError("O pagamento nao foi concluido. Por favor, tente novamente.");
-          setLoading(false);
+          throw new Error("O pagamento nao foi concluido. Por favor, tente novamente.");
         }
       } catch (err) {
         showError(err.message);

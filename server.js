@@ -6,9 +6,14 @@ const app = express();
 app.use(express.json());
 app.use(express.static("public"));
 
-// Create a PaymentIntent with the requested amount and funding type metadata
+// Return publishable key for Stripe.js initialisation
+app.get("/config", (req, res) => {
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
+});
+
+// Create and confirm a PaymentIntent using the payment method from the Payment Element
 app.post("/create-payment-intent", async (req, res) => {
-  const { amount, currency, fundingType, cardNumber, expMonth, expYear } = req.body;
+  const { amount, currency, fundingType, paymentMethodId } = req.body;
 
   if (!amount || amount <= 0) {
     return res.status(400).json({ error: "Invalid amount" });
@@ -23,18 +28,15 @@ app.post("/create-payment-intent", async (req, res) => {
       amount: Math.round(amount * 100),
       currency: currency || "brl",
       payment_method_types: ["card"],
-      payment_method_data: {
-        type: "card",
-        card: {
-          number: cardNumber,
-          exp_month: parseInt(expMonth),
-          exp_year: parseInt(expYear),
-          ...(fundingType === "debit" && {
-            funding_options: { preferred: "debit" },
-          }),
-        },
-      },
+      payment_method: paymentMethodId,
       confirm: true,
+      //...(fundingType === "debit" && {
+      //  payment_method_data: {
+      //    card: {
+      //      funding_options: { preferred: "debit" },
+      //    },
+      //  },
+      //}),
       metadata: {
         required_funding_type: fundingType,
       },
