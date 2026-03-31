@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      padding: 40px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #6b7280;
+      text-decoration: none;
+      margin-bottom: 24px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .back-link:hover { color: #374151; }
+
+    .order-summary {
+      background: #f9fafb;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .order-summary .label {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .order-summary .amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .order-summary .badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge.credit { background: #ede9fe; color: #6d28d9; }
+    .badge.debit  { background: #dcfce7; color: #16a34a; }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+
+    .card-form {
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .card-field {
+      padding: 12px 14px;
+      border-bottom: 1.5px solid #e5e7eb;
+    }
+
+    .card-field:last-child {
+      border-bottom: none;
+    }
+
+    .card-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .card-field input {
+      width: 100%;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      color: #111827;
+      background: transparent;
+      padding: 0;
+    }
+
+    .card-form:focus-within {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    .card-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .card-field-row .card-field:first-child {
+      border-right: 1.5px solid #e5e7eb;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn:hover { background: #4f46e5; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: #fef2f2;
+      border-radius: 8px;
+      display: none;
+    }
+
+    /* Success state */
+    .success-view {
+      display: none;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .success-icon {
+      font-size: 52px;
+      margin-bottom: 16px;
+    }
+
+    .success-view h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+
+    .success-view p {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .success-view .start-over {
+      display: inline-block;
+      margin-top: 24px;
+      padding: 10px 24px;
+      background: #6366f1;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    #spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Payment form -->
+    <div id="payment-view">
+      <button class="back-link" onclick="window.location.href='/'">&#8592; Voltar</button>
+
+      <div class="order-summary">
+        <div>
+          <div class="label">Total a pagar</div>
+          <div class="amount" id="summary-amount">R$ 0,00</div>
+        </div>
+        <span class="badge" id="funding-badge">—</span>
+      </div>
+
+      <h1>Dados do pagamento</h1>
+
+      <form id="payment-form">
+        <div class="card-form">
+          <div class="card-field">
+            <label for="card-number">Número do cartão</label>
+            <input id="card-number" type="text" inputmode="numeric" placeholder="1234 5678 9012 3456" maxlength="19" autocomplete="cc-number" required />
+          </div>
+          <div class="card-field-row">
+            <div class="card-field">
+              <label for="exp-month">Mês de validade</label>
+              <input id="exp-month" type="text" inputmode="numeric" placeholder="MM" maxlength="2" autocomplete="cc-exp-month" required />
+            </div>
+            <div class="card-field">
+              <label for="exp-year">Ano de validade</label>
+              <input id="exp-year" type="text" inputmode="numeric" placeholder="AAAA" maxlength="4" autocomplete="cc-exp-year" required />
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn" id="pay-btn">
+          <span id="spinner"></span>
+          <span id="btn-text">Pagar agora</span>
+        </button>
+        <div class="error" id="error-msg"></div>
+      </form>
+    </div>
+
+    <!-- Success message -->
+    <div class="success-view" id="success-view">
+      <div class="success-icon">&#10003;</div>
+      <h2>Pagamento realizado!</h2>
+      <p id="success-detail"></p>
+      <a href="/" class="start-over">Fazer outro pagamento</a>
+    </div>
+  </div>
+
+  <script>
+    const amount = parseFloat(sessionStorage.getItem("amount") || "0");
+    const fundingType = sessionStorage.getItem("fundingType") || "credit";
+
+    if (!sessionStorage.getItem("amount")) {
+      window.location.href = "/";
+    }
+
+    // Populate order summary
+    document.getElementById("summary-amount").textContent =
+      "R$ " + amount.toFixed(2).replace(".", ",");
+
+    const fundingLabels = { credit: "Credito", debit: "Debito" };
+    const badge = document.getElementById("funding-badge");
+    badge.textContent = fundingLabels[fundingType] || fundingType;
+    badge.classList.add(fundingType);
+
+    // Format card number with spaces as the user types
+    document.getElementById("card-number").addEventListener("input", (e) => {
+      const digits = e.target.value.replace(/\D/g, "").slice(0, 16);
+      e.target.value = digits.replace(/(.{4})/g, "$1 ").trim();
+    });
+
+    const form = document.getElementById("payment-form");
+    const payBtn = document.getElementById("pay-btn");
+    const spinner = document.getElementById("spinner");
+    const btnText = document.getElementById("btn-text");
+    const errorMsg = document.getElementById("error-msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const cardNumber = document.getElementById("card-number").value.replace(/\s/g, "");
+      const expMonth = document.getElementById("exp-month").value.trim();
+      const expYear = document.getElementById("exp-year").value.trim();
+
+      setLoading(true);
+
+      try {
+        const res = await fetch("/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount,
+            currency: "brl",
+            fundingType,
+            cardNumber,
+            expMonth,
+            expYear,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento.");
+
+        if (data.status === "succeeded") {
+          showSuccess();
+        } else {
+          showError("O pagamento nao foi concluido. Por favor, tente novamente.");
+          setLoading(false);
+        }
+      } catch (err) {
+        showError(err.message);
+        setLoading(false);
+      }
+    });
+
+    function setLoading(loading) {
+      payBtn.disabled = loading;
+      spinner.style.display = loading ? "inline-block" : "none";
+      btnText.textContent = loading ? "Processando..." : "Pagar agora";
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = "block";
+      setTimeout(() => { errorMsg.style.display = "none"; }, 6000);
+    }
+
+    function showSuccess() {
+      document.getElementById("payment-view").style.display = "none";
+      const successView = document.getElementById("success-view");
+      successView.style.display = "block";
+      const label = fundingLabels[fundingType] || fundingType;
+      document.getElementById("success-detail").textContent =
+        `R$ ${amount.toFixed(2).replace(".", ",")} pago com cartao de ${label.toLowerCase()}.`;
+      sessionStorage.clear();
+    }
+  </script>
+</body>
+</html>
