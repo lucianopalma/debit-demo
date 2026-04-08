@@ -84,9 +84,107 @@
       margin-bottom: 20px;
     }
 
+    /* Toggle switch */
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #d1d5db;
+      transition: .25s;
+      border-radius: 24px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      transition: .25s;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .toggle-switch input:checked + .toggle-slider { background: #6366f1; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
     #payment-element {
       margin-bottom: 20px;
     }
+
+    /* Raw card form */
+    #card-fields {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    .field-group {
+      margin-bottom: 14px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .field-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 15px;
+      color: #111827;
+      background: #fff;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .field-input::placeholder { color: #9ca3af; }
+
+    .field-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .field-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .field-row .field-group { flex: 1; margin-bottom: 0; }
 
     .btn {
       width: 100%;
@@ -183,7 +281,36 @@
       <h1>Dados do pagamento</h1>
 
       <form id="payment-form">
-        <div id="payment-element"></div>
+        <!-- Payment Element toggle -->
+        <div class="toggle-wrapper">
+          <span class="toggle-label">Payment Element</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="use-payment-element">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Stripe Payment Element -->
+        <div id="payment-element" style="display: none;"></div>
+
+        <!-- Raw card form -->
+        <div id="card-fields" style="display: block;">
+          <div class="field-group">
+            <label class="field-label" for="card-number">Card Number</label>
+            <input type="text" id="card-number" class="field-input" placeholder="1234 5678 9012 3456" maxlength="19" inputmode="numeric" autocomplete="cc-number">
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="card-expiry">Expiry</label>
+              <input type="text" id="card-expiry" class="field-input" placeholder="MM / YY" maxlength="7" inputmode="numeric" autocomplete="cc-exp">
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="card-cvc">CVC</label>
+              <input type="text" id="card-cvc" class="field-input" placeholder="123" maxlength="4" inputmode="numeric" autocomplete="cc-csc">
+            </div>
+          </div>
+        </div>
+
         <button type="submit" class="btn" id="pay-btn">
           <span id="spinner"></span>
           <span id="btn-text">Pagar agora</span>
@@ -224,6 +351,9 @@
     const spinner = document.getElementById("spinner");
     const btnText = document.getElementById("btn-text");
     const errorMsg = document.getElementById("error-msg");
+    const toggle = document.getElementById("use-payment-element");
+    const paymentElementWrapper = document.getElementById("payment-element");
+    const cardFields = document.getElementById("card-fields");
 
     let stripe, elements;
 
@@ -237,58 +367,131 @@
         amount: Math.round(amount * 100),
         currency: "brl",
         paymentMethodCreation: "manual",
+        paymentMethodTypes: ["card"],
       });
       elements.create("payment", { layout: "tabs" }).mount("#payment-element");
     })();
 
-    // On submit: validate → create payment method → create & confirm PI server-side
+    // Toggle between Payment Element and raw card form
+    toggle.addEventListener("change", () => {
+      const useElement = toggle.checked;
+      paymentElementWrapper.style.display = useElement ? "" : "none";
+      cardFields.style.display = useElement ? "none" : "block";
+    });
+
+    // Raw card input formatting
+    document.getElementById("card-number").addEventListener("input", (e) => {
+      let val = e.target.value.replace(/\D/g, "").slice(0, 16);
+      e.target.value = val.replace(/(.{4})(?=.)/g, "$1 ");
+    });
+
+    document.getElementById("card-expiry").addEventListener("input", (e) => {
+      let val = e.target.value.replace(/\D/g, "").slice(0, 4);
+      if (val.length >= 3) {
+        val = val.slice(0, 2) + " / " + val.slice(2);
+      }
+      e.target.value = val;
+    });
+
+    document.getElementById("card-cvc").addEventListener("input", (e) => {
+      e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
+    });
+
+    // On submit: route to the appropriate flow based on toggle
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       setLoading(true);
+      errorMsg.style.display = "none";
 
       try {
-        // Validate the Payment Element fields
-        const { error: submitError } = await elements.submit();
-        if (submitError) throw new Error(submitError.message);
-
-        // Create a PaymentMethod from the Payment Element
-        const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
-          elements,
-          params: {
-            card: {
-              funding_options: {
-                preferred: fundingType === "debit" ? "debit" : "credit",
-              },
-            },
-          },
-        });
-        if (pmError) throw new Error(pmError.message);
-
-        // Create and confirm the PaymentIntent server-side
-        const res = await fetch("/create-payment-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount,
-            currency: "brl",
-            fundingType,
-            paymentMethodId: paymentMethod.id,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento.");
-
-        if (data.status === "succeeded") {
-          showSuccess();
+        if (toggle.checked) {
+          await handlePaymentElementSubmit();
         } else {
-          throw new Error("O pagamento nao foi concluido. Por favor, tente novamente.");
+          await handleRawCardSubmit();
         }
       } catch (err) {
         showError(err.message);
         setLoading(false);
       }
     });
+
+    async function handlePaymentElementSubmit() {
+      // Validate the Payment Element fields
+      const { error: submitError } = await elements.submit();
+      if (submitError) throw new Error(submitError.message);
+
+      // Create a PaymentMethod from the Payment Element
+      const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
+        elements,
+        params: {
+          card: {
+            funding_options: {
+              preferred: fundingType === "debit" ? "debit" : "credit",
+            },
+          },
+        },
+      });
+      if (pmError) throw new Error(pmError.message);
+
+      // Create and confirm the PaymentIntent server-side
+      const res = await fetch("/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          currency: "brl",
+          fundingType,
+          paymentMethodId: paymentMethod.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento.");
+
+      if (data.status === "succeeded") {
+        showSuccess();
+      } else {
+        throw new Error("O pagamento nao foi concluido. Por favor, tente novamente.");
+      }
+    }
+
+    async function handleRawCardSubmit() {
+      const cardNumber = document.getElementById("card-number").value.replace(/\s/g, "");
+      const expiryRaw = document.getElementById("card-expiry").value.replace(/\s/g, "");
+      const cvc = document.getElementById("card-cvc").value.trim();
+
+      if (!cardNumber || !expiryRaw || !cvc) {
+        throw new Error("Por favor, preencha todos os dados do cartao.");
+      }
+
+      const [expMonth, expYear] = expiryRaw.split("/");
+      if (!expMonth || !expYear) {
+        throw new Error("Data de vencimento invalida.");
+      }
+
+      const res = await fetch("/create-payment-intent-raw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          currency: "brl",
+          fundingType,
+          cardNumber,
+          cardExpMonth: expMonth.trim(),
+          cardExpYear: "20" + expYear.trim(),
+          cardCvc: cvc,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento.");
+
+      if (data.status === "succeeded") {
+        showSuccess();
+      } else {
+        throw new Error("O pagamento nao foi concluido. Por favor, tente novamente.");
+      }
+    }
 
     function setLoading(loading) {
       payBtn.disabled = loading;

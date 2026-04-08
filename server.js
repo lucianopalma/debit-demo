@@ -48,6 +48,47 @@ app.post("/create-payment-intent", async (req, res) => {
   }
 });
 
+// Create and confirm a PaymentIntent using raw card data (no Payment Element)
+app.post("/create-payment-intent-raw", async (req, res) => {
+  const { amount, currency, fundingType, cardNumber, cardExpMonth, cardExpYear, cardCvc } = req.body;
+
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ error: "Invalid amount" });
+  }
+
+  if (!["credit", "debit"].includes(fundingType)) {
+    return res.status(400).json({ error: "Invalid funding type" });
+  }
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: currency || "brl",
+      payment_method_types: ["card"],
+      payment_method_data: {
+        type: "card",
+        card: {
+          number: cardNumber,
+          exp_month: parseInt(cardExpMonth),
+          exp_year: parseInt(cardExpYear),
+          cvc: cardCvc,
+          funding_options: {
+            preferred: fundingType,
+          },
+        },
+      },
+      confirm: true,
+      metadata: {
+        required_funding_type: fundingType,
+      },
+    });
+
+    res.json({ status: paymentIntent.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Retrieve payment intent to show result
 app.get("/payment-intent/:id", async (req, res) => {
   try {
