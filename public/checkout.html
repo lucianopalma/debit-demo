@@ -290,6 +290,15 @@
           </label>
         </div>
 
+        <!-- Funding type toggle -->
+        <div class="toggle-wrapper">
+          <span class="toggle-label">Send preferred funding type</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="send-funding-type" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
         <!-- Stripe Payment Element -->
         <div id="payment-element" style="display: none;"></div>
 
@@ -352,6 +361,7 @@
     const btnText = document.getElementById("btn-text");
     const errorMsg = document.getElementById("error-msg");
     const toggle = document.getElementById("use-payment-element");
+    const sendFundingToggle = document.getElementById("send-funding-type");
     const paymentElementWrapper = document.getElementById("payment-element");
     const cardFields = document.getElementById("card-fields");
 
@@ -423,13 +433,13 @@
       // Create a PaymentMethod from the Payment Element
       const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
         elements,
-        params: {
+        params: sendFundingToggle.checked ? {
           card: {
             funding_options: {
               preferred: fundingType === "debit" ? "debit" : "credit",
             },
           },
-        },
+        } : {},
       });
       if (pmError) throw new Error(pmError.message);
 
@@ -476,6 +486,7 @@
           amount,
           currency: "brl",
           fundingType,
+          sendFundingType: sendFundingToggle.checked,
           cardNumber,
           cardExpMonth: expMonth.trim(),
           cardExpYear: "20" + expYear.trim(),

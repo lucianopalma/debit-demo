@@ -50,7 +50,7 @@ app.post("/create-payment-intent", async (req, res) => {
 
 // Create and confirm a PaymentIntent using raw card data (no Payment Element)
 app.post("/create-payment-intent-raw", async (req, res) => {
-  const { amount, currency, fundingType, cardNumber, cardExpMonth, cardExpYear, cardCvc } = req.body;
+  const { amount, currency, fundingType, sendFundingType, cardNumber, cardExpMonth, cardExpYear, cardCvc } = req.body;
 
   if (!amount || amount <= 0) {
     return res.status(400).json({ error: "Invalid amount" });
@@ -72,9 +72,11 @@ app.post("/create-payment-intent-raw", async (req, res) => {
           exp_month: parseInt(cardExpMonth),
           exp_year: parseInt(cardExpYear),
           cvc: cardCvc,
-          funding_options: {
-            preferred: fundingType,
-          },
+          ...(sendFundingType && {
+            funding_options: {
+              preferred: fundingType,
+            },
+          }),
         },
       },
       confirm: true,
